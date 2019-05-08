@@ -17,7 +17,7 @@
 void generateRS(Buffer *buf) {
     int i, j;
     int diskID = R_BEGIN_DISK;
-    int nextDisk;
+    int nextDisk, lastDisk;
     unsigned char *blk_char = NULL;
     unsigned int *blk_int = NULL;
     for (i = 0; i < R_BLOCK_NUM; i++) {
@@ -28,9 +28,11 @@ void generateRS(Buffer *buf) {
             *(blk_int+2*j+1) = rand()%1000+1;
         }
         nextDisk = diskID+1;
+        lastDisk = diskID-1;
+        if (i == R_BLOCK_NUM-1) nextDisk = 0;
+        if (i == 0)  lastDisk = 0;
         *(blk_int+2*j) = nextDisk;
-        *(blk_int+2*j+1) = -1;
-        if (i == R_BLOCK_NUM-1) *(blk_int+2*j) = 0;
+        *(blk_int+2*j+1) = lastDisk;
         writeBlockToDisk(blk_char, diskID, buf);
         freeBlockInBuffer(blk_char, buf);
         diskID++;
@@ -45,9 +47,11 @@ void generateRS(Buffer *buf) {
             *(blk_int+2*j+1) = rand()%1000+1;
         }
         nextDisk = diskID+1;
+        lastDisk = diskID-1;
         if (i == S_BLOCK_NUM-1) nextDisk = 0;
+        if (i == 0)  lastDisk = 0;
         *(blk_int+2*j) = nextDisk;
-        *(blk_int+2*j+1) = -1;
+        *(blk_int+2*j+1) = lastDisk;
         writeBlockToDisk(blk_char, diskID, buf);
         freeBlockInBuffer(blk_char, buf);
         diskID++;
@@ -65,7 +69,7 @@ void printBlock(int disk, Buffer *buf) {
         printf("%d\t%d\n", blk_int[2*i], blk_int[2*i+1]);
         i++;
     }
-    printf("next %d\t%d\n", blk_int[2*i], blk_int[2*i+1]);
+    printf("next: %d\t last:%d\n", blk_int[2*i], blk_int[2*i+1]);
     freeBlockInBuffer(blk_char, buf);
 }
 
@@ -82,7 +86,7 @@ void writeRS(int R_beign, int S_begin, Buffer *buf) {
         for (j = 0; j < BLOCK_TUPLE_NUM; j++) {
             fprintf(fp, "%d\t%d\n", blk_int[2*j], blk_int[2*j+1]);
         }
-        fprintf(fp, "next %d\t%d\n\n", blk_int[2*j], blk_int[2*j+1]);
+        fprintf(fp, "next: %d\t last: %d\n\n", blk_int[2*j], blk_int[2*j+1]);
         freeBlockInBuffer(blk_char, buf);
     }
     fclose(fp);
@@ -95,7 +99,7 @@ void writeRS(int R_beign, int S_begin, Buffer *buf) {
         for (j = 0; j < BLOCK_TUPLE_NUM; j++) {
             fprintf(fp, "%d\t%d\n", blk_int[2*j], blk_int[2*j+1]);
         }
-        fprintf(fp, "next %d\t%d\n\n", blk_int[2*j], blk_int[2*j+1]);
+        fprintf(fp, "next: %d\t last: %d\n\n", blk_int[2*j], blk_int[2*j+1]);
         freeBlockInBuffer(blk_char, buf);
     }
     fclose(fp);
