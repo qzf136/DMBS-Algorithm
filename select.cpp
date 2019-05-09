@@ -2,24 +2,17 @@
 #include <stdlib.h>
 #include "util.c"
 
+
+
 void linearSelect(int R_A, int S_C, Buffer *buf);
 void mergeSortAllDisk(Buffer *buf);
 void mergeSort(int begin1, int begin2, int diskNum, int output, Buffer *buf);
-void swap(int *p1, int *p2);
+void swap(unsigned int *p1, unsigned int *p2);
 void sortDisk(int disk, Buffer *buf);
 void binarySearch(int R_A, int S_C, Buffer *buf);
-
-int main(int argc, char const *argv[])
-{
-    Buffer buf;
-    initBuffer(bufSize, blkSize, &buf);
-    generateRS(&buf);
-    // writeRS(R_BEGIN_DISK, S_BEGIN_DISK, &buf);
-    // linearSelect(40, 60, &buf);
-    mergeSortAllDisk(&buf);
-    writeRS(R_BEGIN_DISK, S_BEGIN_DISK, &buf);
-    return 0;
-}
+int* rightSearchEqual(int val, int disk, int *outInfo, Buffer *buf); 
+int* leftSearchEqual(int val, int disk, int *outInfo, Buffer *buf); 
+int* rightSearchNequal(int val, int disk, int* outInfo, Buffer *buf);
 
 void linearSelect(int R_A, int S_C, Buffer *buf) {
     int i, j;
@@ -207,12 +200,11 @@ void mergeSort(int begin1, int begin2, int diskNum, int output, Buffer *buf) {
     }
 }
 
-void swap(int *p1, int *p2) {
+void swap(unsigned int *p1, unsigned int *p2) {
     int temp = *p1;
     *p1 = *p2;
     *p2 = temp;
 }
-
 
 void sortDisk(int disk, Buffer *buf) {
     unsigned char *blk_char;
@@ -247,10 +239,8 @@ void mergeSortAllDisk(Buffer *buf) {
             disk2 = disk1 + i;
             output = i*1000+disk1;
             if (i == R_BLOCK_NUM/2) output = R_BEGIN_DISK+2*i*j;
-            printf("%d  %d  %d\n", disk1, disk2, output);
             mergeSort(disk1, disk2, i, output, buf);
         }
-        printf("\n");
     }
     for (i = 1; i <= S_BLOCK_NUM/2; i=i*2) {
         for (j = 0; j < S_BLOCK_NUM/2/i; j++) {
@@ -258,10 +248,8 @@ void mergeSortAllDisk(Buffer *buf) {
             disk2 = disk1 + i;
             output = i*2000+disk1;
             if (i == S_BLOCK_NUM/2) output = S_BEGIN_DISK + 2*i*j;
-            printf("%d  %d  %d\n", disk1, disk2, output);
             mergeSort(disk1, disk2, i, output, buf);
         }
-        printf("\n");
     }
     for (i = 1; i < R_BLOCK_NUM/2; i=i*2) {
         for (j = 0; j < R_BLOCK_NUM/2/i; j++) {
@@ -286,59 +274,255 @@ void mergeSortAllDisk(Buffer *buf) {
 }
 
 void binarySearch(int R_A, int S_C, Buffer *buf) {
+    int *outInfo  = (int *)malloc(sizeof(int)*2);
     int i, j;
     int k = 0;
+    int readData;
     int searchDisk, leftDisk, rightDisk;
-    int nextReadDisk;
     int outputDisk = 10;
+    int thisSearch;
     unsigned char *blk_char = NULL;
     unsigned int *blk_int = NULL;
-    unsigned char *result_blk_char = NULL;
-    unsigned int *result_blk_int = NULL;
-    result_blk_char = getNewBlockInBuffer(buf);
-    result_blk_int = (unsigned int *)result_blk_char;
     searchDisk = R_BEGIN_DISK+R_BLOCK_NUM/2;
     leftDisk = R_BEGIN_DISK;
     rightDisk = R_BEGIN_DISK + R_BLOCK_NUM - 1;
     while (1) {
+        thisSearch = searchDisk;
         blk_char = readBlockFromDisk(searchDisk, buf);
         blk_int = (unsigned int*)blk_char;
-        if (blk_int[0] < R_A) {
+        readData = blk_int[0];
+        if (readData < R_A) {
             freeBlockInBuffer(blk_char, buf);
             leftDisk = searchDisk;
             searchDisk = (searchDisk + rightDisk) / 2;
-        } else if (blk_int[0] > R_A) {
+        } else if (readData > R_A) {
             freeBlockInBuffer(blk_char, buf);
             rightDisk = searchDisk;
             searchDisk = (searchDisk + leftDisk) / 2;
         } else {
-            i = 0;
-            j = 0;
-            k = 0;
-            while (1) {
-                while (blk_int[2*i] == R_A && i < BLOCK_TUPLE_NUM) {
-                    result_blk_int[2*k] = blk_int[2*i];
-                    result_blk_int[2*k+1] = blk_int[2*i+1];
-                    i++;
-                    k++;
-                    if (k == BLOCK_TUPLE_NUM) {
-                        result_blk_int[2*k] = outputDisk+1;
-                        result_blk_int[2*k+1] = outputDisk-1;
-                        if (outputDisk == 10) result_blk_int[2*k+1] = 0;
-                        writeBlockToDisk(result_blk_char, outputDisk, buf);
-                        result_blk_char = getNewBlockInBuffer(buf);
-                        result_blk_int = (unsigned int *)result_blk_char;
-                        k = 0;
-                        outputDisk++;
-                    }
-                }
-                if (i == BLOCK_TUPLE_NUM) {
-                    nextReadDisk = blk_int[2*BLOCK_TUPLE_NUM];
-                    freeBlockInBuffer(blk_char, buf);
-                    blk_char = readBlockFromDisk(nextReadDisk,buf);
-                    blk_int = (unsigned int *)blk_char;
-                }
-            }
+            outInfo[0] = outputDisk;
+            outInfo[1] = k;
+            outInfo = leftSearchEqual(R_A, searchDisk, outInfo, buf);
+            outInfo = rightSearchEqual(R_A, searchDisk, outInfo, buf);
+            break;
+        }
+        if (thisSearch == searchDisk) {
+            outInfo[0] = outputDisk;
+            outInfo[1] = k;
+            outInfo = rightSearchNequal(R_A, searchDisk, outInfo, buf);
+            break;
         }
     }
+    freeBlockInBuffer(blk_char, buf);
+    searchDisk = S_BEGIN_DISK+S_BLOCK_NUM/2;
+    leftDisk = S_BEGIN_DISK;
+    rightDisk = S_BEGIN_DISK + S_BLOCK_NUM - 1;
+    outputDisk = outInfo[0];
+    k = outInfo[1];
+    while (1) {
+        thisSearch = searchDisk;
+        blk_char = readBlockFromDisk(searchDisk, buf);
+        blk_int = (unsigned int*)blk_char;
+        readData = blk_int[0];
+        if (readData < S_C) {
+            freeBlockInBuffer(blk_char, buf);
+            leftDisk = searchDisk;
+            searchDisk = (searchDisk + rightDisk) / 2;
+        } else if (readData > S_C) {
+            freeBlockInBuffer(blk_char, buf);
+            rightDisk = searchDisk;
+            searchDisk = (searchDisk + leftDisk) / 2;
+        } else {
+            outInfo[0] = outputDisk;
+            outInfo[1] = k;
+            outInfo = leftSearchEqual(S_C, searchDisk, outInfo, buf);
+            outInfo = rightSearchEqual(S_C, searchDisk, outInfo, buf);
+            break;
+        }
+        if (thisSearch == searchDisk) {
+            outInfo[0] = outputDisk;
+            outInfo[1] = k;
+            outInfo = rightSearchNequal(S_C, searchDisk, outInfo, buf);
+            
+            break;
+        }
+    }
+    outputDisk = outInfo[0];
+    freeBlockInBuffer(blk_char, buf);
+    blk_char = readBlockFromDisk(outputDisk, buf);
+    blk_int = (unsigned int *)blk_char;
+    blk_int[2*BLOCK_TUPLE_NUM+1] = outputDisk-1;
+    writeBlockToDisk(blk_char, outputDisk, buf);
+}
+
+int* rightSearchEqual(int val, int disk, int *outInfo, Buffer *buf) {
+    int i = 0;
+    unsigned char *blk_char = readBlockFromDisk(disk, buf);
+    unsigned int *blk_int = (unsigned int *)blk_char;
+    unsigned char *result_blk_char;
+    unsigned int *result_blk_int;
+    int outputDisk = outInfo[0];
+    int k = outInfo[1];
+    if (k != 0)     result_blk_char = readBlockFromDisk(outputDisk, buf);
+    else    result_blk_char = getNewBlockInBuffer(buf);
+    int nextReadDisk;
+    while (1) {
+        while (blk_int[2*i] == val && i < BLOCK_TUPLE_NUM) {
+            result_blk_int[2*k] = blk_int[2*i];
+            result_blk_int[2*k+1] = blk_int[2*i+1];
+            i++;
+            k++;
+            if (k == BLOCK_TUPLE_NUM) {
+                // result_blk_int[2*k] = outputDisk+1;
+                // result_blk_int[2*k+1] = outputDisk-1;
+                // if (outputDisk == 10) result_blk_int[2*k+1] = 0;
+                writeBlockToDisk(result_blk_char, outputDisk, buf);
+                result_blk_char = getNewBlockInBuffer(buf);
+                result_blk_int = (unsigned int *)result_blk_char;
+                k = 0;
+                outputDisk++;
+            }
+        }
+        if (i == BLOCK_TUPLE_NUM) {
+            nextReadDisk = blk_int[2*BLOCK_TUPLE_NUM];
+            freeBlockInBuffer(blk_char, buf);
+            blk_char = readBlockFromDisk(nextReadDisk,buf);
+            blk_int = (unsigned int *)blk_char;
+            i = 0;
+        }
+        if (blk_int[2*i] != val) {
+            freeBlockInBuffer(blk_char, buf);
+            break;
+        }
+    }
+    if (k != BLOCK_TUPLE_NUM) {
+        memset(result_blk_char+4*2*k, 0, sizeof(char)*2*(BLOCK_TUPLE_NUM+1-k)*4);
+        writeBlockToDisk(result_blk_char, outputDisk, buf);
+        freeBlockInBuffer(result_blk_char, buf);
+    }
+    freeBlockInBuffer(result_blk_char, buf);
+    freeBlockInBuffer(blk_char, buf);
+    outInfo[0] = outputDisk;
+    outInfo[1] = k;
+    return outInfo;
+}
+
+int* leftSearchEqual(int val, int disk, int *outInfo, Buffer *buf) {
+    int i = BLOCK_TUPLE_NUM-1;
+    unsigned char *blk_char = readBlockFromDisk(disk, buf);
+    unsigned int *blk_int = (unsigned int *)blk_char;
+    unsigned char *result_blk_char;
+    unsigned int *result_blk_int;
+    int outputDisk = outInfo[0];
+    int k = outInfo[1];
+    if (k != 0)     result_blk_char = readBlockFromDisk(outputDisk, buf);
+    else    result_blk_char = getNewBlockInBuffer(buf);
+    int readDisk = blk_int[2*BLOCK_TUPLE_NUM+1];
+    freeBlockInBuffer(blk_char, buf);
+    if (readDisk == 0)  return outInfo;
+    blk_char = readBlockFromDisk(readDisk, buf);
+    blk_int = (unsigned int *)blk_char;
+    while (1) {
+        while (blk_int[2*i] == val && i >= 0) {
+            result_blk_int[2*k] = blk_int[2*i];
+            result_blk_int[2*k+1] = blk_int[2*i+1];
+            i--;
+            k++;
+            if (k == BLOCK_TUPLE_NUM) {
+                // result_blk_int[2*k] = outputDisk+1;
+                // result_blk_int[2*k+1] = outputDisk-1;
+                // if (outputDisk == 10) result_blk_int[2*k+1] = 0;
+                writeBlockToDisk(result_blk_char, outputDisk, buf);
+                result_blk_char = getNewBlockInBuffer(buf);
+                result_blk_int = (unsigned int *)result_blk_char;
+                k = 0;
+                outputDisk++;
+            }
+        }
+        if (i == -1) {
+            readDisk = blk_int[2*BLOCK_TUPLE_NUM+1];
+            freeBlockInBuffer(blk_char, buf);
+            blk_char = readBlockFromDisk(readDisk,buf);
+            blk_int = (unsigned int *)blk_char;
+            i = BLOCK_TUPLE_NUM-1;
+        }
+        if (blk_int[2*i] != val) {
+            freeBlockInBuffer(blk_char, buf);
+            break;
+        }
+    }
+    if (k != BLOCK_TUPLE_NUM) {
+        // result_blk_int[2*k] = 0;
+        // result_blk_int[2*k+1] = outputDisk-1;
+        // if (outputDisk == 10) result_blk_int[2*k+1] = 0;
+        // k++;
+        memset(result_blk_char+4*2*k, 0, sizeof(char)*2*(BLOCK_TUPLE_NUM+1-k)*4);
+        writeBlockToDisk(result_blk_char, outputDisk, buf);
+        freeBlockInBuffer(result_blk_char, buf);
+    }
+    freeBlockInBuffer(result_blk_char, buf);
+    freeBlockInBuffer(blk_char, buf);
+    outInfo[0] = outputDisk;
+    outInfo[1] = k;
+    return outInfo;
+}
+
+int* rightSearchNequal(int val, int disk, int* outInfo, Buffer *buf) {
+    int outDisk = outInfo[0];
+    int k = outInfo[1];
+    int readDisk = disk;
+    unsigned char *blk_char, *result_blk_char;
+    unsigned int *blk_int, *result_blk_int;
+    if (k != 0)     result_blk_char = readBlockFromDisk(outDisk, buf);
+    else    result_blk_char = getNewBlockInBuffer(buf);
+    result_blk_int = (unsigned int *)result_blk_char;
+    int i = 0;
+    blk_char = readBlockFromDisk(readDisk, buf);
+    blk_int = (unsigned int *)blk_char;
+    while (blk_int[2*i] != val) {
+        i++;
+        if (i == BLOCK_TUPLE_NUM) {
+            i = 0;
+            freeBlockInBuffer(blk_char, buf);
+            readDisk = blk_int[2*BLOCK_TUPLE_NUM];
+            if (readDisk == 0)   break;
+            blk_char = readBlockFromDisk(readDisk, buf);
+            blk_int = (unsigned int *)blk_char;
+        }
+    }
+    while (blk_int[2*i] == val) {
+        result_blk_int[2*k] = blk_int[2*i];
+        result_blk_int[2*k+1] = blk_int[2*i+1];
+        i++;
+        k++;
+        if (k == BLOCK_TUPLE_NUM) {
+            result_blk_int[2*k] = outDisk+1;
+            result_blk_int[2*k+1] = outDisk-1;
+            if (outDisk == 10)  result_blk_int[2*k+1] = 0;
+            writeBlockToDisk(result_blk_char, outDisk, buf);
+            freeBlockInBuffer(result_blk_char, buf);
+            k = 0;
+            outDisk++;
+            result_blk_char = getNewBlockInBuffer(buf);
+            result_blk_int = (unsigned int *)result_blk_char;
+        }
+        if (i == BLOCK_TUPLE_NUM) {
+            i = 0;
+            freeBlockInBuffer(blk_char, buf);
+            readDisk = blk_int[2*BLOCK_TUPLE_NUM];
+            if (readDisk == 0)   break;
+            blk_char = readBlockFromDisk(readDisk, buf);
+            blk_int = (unsigned int *)blk_char;
+        }
+    }
+    if (k != BLOCK_TUPLE_NUM) {
+        memset(result_blk_char+4*2*k, 0, sizeof(char)*2*(BLOCK_TUPLE_NUM+1-k)*4);
+        writeBlockToDisk(result_blk_char, outDisk, buf);
+        freeBlockInBuffer(result_blk_char, buf);
+    }
+    outInfo[0] = outDisk;
+    outInfo[1] = k;
+    freeBlockInBuffer(result_blk_char, buf);
+    freeBlockInBuffer(blk_char, buf);
+    return outInfo;
 }
