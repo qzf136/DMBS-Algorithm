@@ -680,6 +680,22 @@ void printBlock(int disk, Buffer *buf) {
     freeBlockInBuffer(blk_char, buf);
 }
 
+void printResult(int begin, Buffer *buf) {
+    int i = 0;
+    int disk = begin;
+    unsigned char *blk_char;
+    unsigned int *blk_int;
+    do {
+        blk_char = readBlockFromDisk(disk, buf);
+        blk_int = (unsigned int *)blk_char;
+        for (i = 0; i < BLOCK_TUPLE_NUM; i++) {
+            printf("%d\t%d\n", blk_int[2*i], blk_int[2*i+1]);
+        }
+        printf("next: %d\tlast: %d\n\n", blk_int[2*i], blk_int[2*i+1]);
+        disk++;
+    } while (blk_int[2*BLOCK_TUPLE_NUM] != 0);
+}
+
 void writeRS(int R_beign, int S_begin, Buffer *buf) {
     FILE *fp;
     unsigned char *blk_char;
@@ -1005,3 +1021,50 @@ void BPlusTreeSearch(int R_A, int S_C, Buffer *buf) {
         writeBlockToDisk(result_blk_char, DISK, buf);
     }
 }
+
+void Project(Buffer *buf) {
+    int i, j;
+    int k = 0;
+    int DISK = 0;
+    int flag[41] = {0};
+    unsigned char *blk_char = NULL;
+    unsigned int *blk_int = NULL;
+    unsigned char *result_blk_char = NULL;
+    unsigned int *result_blk_int = NULL;
+    result_blk_char = getNewBlockInBuffer(buf);
+    result_blk_int = (unsigned int *)result_blk_char;
+    for (i=0; i <R_BLOCK_NUM; i++) {
+        blk_char = readBlockFromDisk(R_BEGIN_DISK+i, buf);
+        blk_int = (unsigned int*)blk_char;
+        for (j = 0; j < BLOCK_TUPLE_NUM; j++) {
+            if (flag[blk_int[2*j]] == 0) {
+                result_blk_int[k] = blk_int[2*j];
+                k++;
+                flag[blk_int[2*j]] = 1;
+            }
+            if (k == 2*BLOCK_TUPLE_NUM) {
+                result_blk_int[k] = DISK+1;
+                result_blk_int[k+1] = DISK-1;
+                if (DISK == 0)  result_blk_int[2*k+1] = 0;
+                writeBlockToDisk(result_blk_char, DISK, buf);
+                result_blk_char = getNewBlockInBuffer(buf);
+                result_blk_int = (unsigned int *)result_blk_char;
+                k = 0;
+                DISK++;
+            }
+        }
+        freeBlockInBuffer(blk_char, buf);
+    }
+    if (k != 0) {
+        while (k < 2*BLOCK_TUPLE_NUM) {
+            result_blk_int[k] = 0;
+            k++;
+        }
+        result_blk_int[k] = 0;
+        result_blk_int[k+1] = DISK-1;
+        if (DISK == 0)  result_blk_int[k+1] = 0;
+        writeBlockToDisk(result_blk_char, DISK, buf);
+    }
+}
+
+

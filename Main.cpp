@@ -20,8 +20,14 @@ int main(int argc, char const *argv[])
     // printBlock(10, &buf);
     // printBlock(11, &buf);
     
-    BPlusTreeSearch(40, 60, &buf);
-    printBlock(0, &buf);
-    printBlock(1, &buf);
+    // BPlusTreeSearch(40, 60, &buf);
+    // printBlock(0, &buf);
+    // printBlock(1, &buf);
+
+    Project(&buf);
+    printResult(0, &buf);
+
+
+
     return 0;
 }

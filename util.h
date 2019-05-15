@@ -20,6 +20,8 @@ void generateRS(Buffer *buf);
 
 void printBlock(int disk, Buffer *buf);
 
+void printResult(int begin, Buffer *buf);
+
 void writeRS(int R_beign, int S_begin, Buffer *buf);
 
 void linearSelect(int R_A, int S_C, Buffer *buf);
@@ -30,6 +32,6 @@ void binarySearch(int R_A, int S_C, Buffer *buf);
 
 void BPlusTreeSearch(int R_A, int S_C, Buffer *buf);
 
-void Project()
+void Project(Buffer *buf);
 
 #endif
