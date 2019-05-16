@@ -49,6 +49,8 @@ static void sortDisk(int disk, Buffer *buf);
 static int* rightSearchEqual(int val, int disk, int *outInfo, Buffer *buf);
 static int* leftSearchEqual(int val, int disk, int *outInfo, Buffer *buf);
 static int* rightSearchNequal(int val, int disk, int* outInfo, Buffer *buf);
+static void hashTable(int beginDisk, Buffer *buf);
+static void Hjoin(Buffer *buf);
 
 static void mergeSort(int begin1, int begin2, int diskNum, int output, Buffer *buf) {
     unsigned char *blk_char1 = NULL, *blk_char2 = NULL;
@@ -650,16 +652,21 @@ void printResult(int begin, Buffer *buf) {
     int disk = begin;
     unsigned char *blk_char;
     unsigned int *blk_int;
+    FILE *file;
+    file = fopen("result.txt", "w");
     do {
         blk_char = readBlockFromDisk(disk, buf);
         blk_int = (unsigned int *)blk_char;
         for (i = 0; i < BLOCK_TUPLE_NUM; i++) {
             printf("%d\t%d\n", blk_int[2*i], blk_int[2*i+1]);
+            fprintf(file, "%d\t%d\n", blk_int[2*i], blk_int[2*i+1]);
         }
         printf("next: %d\tlast: %d\n\n", blk_int[2*i], blk_int[2*i+1]);
+        fprintf(file, "next: %d\tlast: %d\n\n", blk_int[2*i], blk_int[2*i+1]);
         disk++;
         freeBlockInBuffer(blk_char, buf);
     } while (blk_int[2*BLOCK_TUPLE_NUM] != 0);
+    fclose(file);
 }
 
 void writeRS(int R_beign, int S_begin, Buffer *buf) {
@@ -1051,7 +1058,7 @@ void nestLoopJoin(Buffer *buf) {
             blk_int2 = (unsigned int *)blk_char2;
             for (j1 = 0; j1 < BLOCK_TUPLE_NUM; j1++) {
                 for (j2 = 0; j2 < BLOCK_TUPLE_NUM; j2++) {
-                    if (blk_int1[2*j1] == blk_int2[2*j2]) {
+                    if (blk_int1[2*j1] == blk_int2[2*j2] && blk_int1[2*j1] > 0) {
                         result_blk_int[2*k] = blk_int1[2*j1];;
                         result_blk_int[2*k+1] = blk_int1[2*j1+1];
                         result_blk_int[2*k+2] = blk_int2[2*j2+1];
@@ -1105,13 +1112,13 @@ void sortMergeJoin(Buffer *buf) {
     for (i1 = 0; i1 < R_BLOCK_NUM; i1++) {
         blk_char1 = readBlockFromDisk(R_BEGIN_DISK+i1, buf);
         blk_int1 = (unsigned int *)blk_char1;
-        for (i2 = m2; i2 < S_BLOCK_NUM; i2++) {
+        for (i2 = 0; i2 < S_BLOCK_NUM; i2++) {
             blk_char2 = readBlockFromDisk(S_BEGIN_DISK+i2, buf);
             blk_int2 = (unsigned int *)blk_char2;
             for (j1 = 0; j1 < BLOCK_TUPLE_NUM; j1++) {
                 for (j2 = 0; j2 < BLOCK_TUPLE_NUM; j2++) {
                     if (blk_int1[2*j1] < blk_int2[2*j2])    break;
-                    if (blk_int1[2*j1] == blk_int2[2*j2]) {
+                    if (blk_int1[2*j1] == blk_int2[2*j2] && blk_int1[2*j1] > 0) {
                         // printf("%d %d %d %d -1\n", blk_int1[2*j1], blk_int1[2*j1+1], blk_int2[2*j2], blk_int2[2*j2+1]);
                         // printf("%d  %d\n", DISK, k);
                         result_blk_int[2*k] = blk_int1[2*j1];
@@ -1137,7 +1144,6 @@ void sortMergeJoin(Buffer *buf) {
             freeBlockInBuffer(blk_char2, buf);
             if (blk_int1[2*BLOCK_TUPLE_NUM-2] < blk_int2[2*BLOCK_TUPLE_NUM-2])  break;
         }
-        m2 = i2;
         freeBlockInBuffer(blk_char1, buf);
     }
     if (k != 0) {
@@ -1153,6 +1159,148 @@ void sortMergeJoin(Buffer *buf) {
     }
 }
 
-void HashJoin(Buffer *buf) {
+static void hashTable(int beginDisk, Buffer *buf) {
+    int i, j;
+    int k[5];
+    for (int t = 0; t < 5; t++) {
+        k[t] = 0;
+    }
+    int bucket;
+    int diskNum;
+    int DISK[5];
+    if (beginDisk == 100) {
+        diskNum = 16;
+        for (i = 0; i < 5; i++) {
+            DISK[i] = 1000 + i * 100;
+        }
+    } else {
+        diskNum = 32;
+        for (i = 0; i < 5; i++) {
+            DISK[i] = 2000 + i * 100;
+        }
+    }
+    unsigned char *blk_char = NULL;
+    unsigned int *blk_int = NULL;
+    unsigned char **result_blk_char = (unsigned char **)malloc(sizeof(unsigned char *)*5);
+    unsigned int **result_blk_int = (unsigned int **)malloc(sizeof(unsigned int *)*5);
+    for (i = 0; i < 5; i++) {
+        result_blk_char[i] = getNewBlockInBuffer(buf);
+        result_blk_int[i] = (unsigned int *)result_blk_char[i];
+    }
+    for (i=0; i < diskNum; i++) {
+        blk_char = readBlockFromDisk(beginDisk+i, buf);
+        blk_int = (unsigned int*)blk_char;
+        for (j = 0; j < BLOCK_TUPLE_NUM; j++) {
+            bucket = blk_int[2*j]%5;
+            result_blk_int[bucket][2*k[bucket]] = blk_int[2*j];
+            result_blk_int[bucket][2*k[bucket]+1] = blk_int[2*j+1];
+            k[bucket]++;
+            if (k[bucket] == BLOCK_TUPLE_NUM) {
+                result_blk_int[bucket][2*k[bucket]] = DISK[bucket]+1;
+                result_blk_int[bucket][2*k[bucket]+1] = DISK[bucket]-1;
+                if (DISK[bucket] == 0)  result_blk_int[bucket][2*k[bucket]+1] = 0;
+                writeBlockToDisk(result_blk_char[bucket], DISK[bucket], buf);
+                result_blk_char[bucket] = getNewBlockInBuffer(buf);
+                result_blk_int[bucket] = (unsigned int *)result_blk_char[bucket];
+                k[bucket] = 0;
+                DISK[bucket]++;
+            }
+        }
+        freeBlockInBuffer(blk_char, buf);
+    }
+    for (int i = 0; i < 5; i++) {
+        while (k[i] < BLOCK_TUPLE_NUM) {
+            result_blk_int[i][2*k[i]] = -1;
+            result_blk_int[i][2*k[i]+1] = -1;
+            k[i]++;
+        }
+        result_blk_int[i][2*k[i]] = 0;
+        result_blk_int[i][2*k[i]+1] = DISK[i]-1;
+        writeBlockToDisk(result_blk_char[i], DISK[i], buf);
+        freeBlockInBuffer(result_blk_char[i], buf);
+    }    
+}
+
+static void Hjoin(Buffer *buf) {
+    int bucket = 0;
+    int i1, j1, i2, j2;
+    int m2 = 0;
+    int k = 0;
+    int readRDisk, readSDisk;
+    int DISK = 0;
+    unsigned char *blk_char1 = NULL;
+    unsigned int *blk_int1 = NULL;
+    unsigned char *blk_char2 = NULL;
+    unsigned int *blk_int2 = NULL;
+    unsigned char *result_blk_char = getNewBlockInBuffer(buf);
+    unsigned int *result_blk_int = (unsigned int *)result_blk_char;
+    for (bucket = 0; bucket < 5; bucket++) {
+        readRDisk = 1000 + bucket*100;
+        readSDisk = 2000 + bucket*100;
+        do {
+            blk_char1 = readBlockFromDisk(readRDisk, buf);
+            blk_int1 = (unsigned int *)blk_char1;
+            if (blk_int1[0] == -1)  break;
+            do {
+                blk_char2 = readBlockFromDisk(readSDisk, buf);
+                blk_int2 = (unsigned int *)blk_char2;
+                for (j1 = 0; j1 < BLOCK_TUPLE_NUM; j1++) {
+                    if (blk_int1[2*j1] == -1)   break;
+                    for (j2 = 0; j2 < BLOCK_TUPLE_NUM; j2++) {
+                        if (blk_int2[2*j2] == -1)   break;
+                        if (blk_int1[2*j1] == blk_int2[2*j2] && blk_int1[2*j1] > 0) {
+                            result_blk_int[2*k] = blk_int1[2*j1];
+                            result_blk_int[2*k+1] = blk_int1[2*j1+1];
+                            result_blk_int[2*k+2] = blk_int2[2*j2+1];
+                            result_blk_int[2*k+3] = -1;
+                            k+=2;
+                        }
+                        if (k == 6) {
+                            result_blk_int[2*k] = -1;
+                            result_blk_int[2*k+1] = -1;
+                            result_blk_int[2*BLOCK_TUPLE_NUM] = DISK+1;
+                            result_blk_int[2*BLOCK_TUPLE_NUM+1] = DISK-1;
+                            writeBlockToDisk(result_blk_char, DISK, buf);
+                            result_blk_char = getNewBlockInBuffer(buf);
+                            result_blk_int = (unsigned int *)result_blk_char;
+                            k = 0;
+                            DISK++;
+                        } 
+                    }
+                }
+                freeBlockInBuffer(blk_char2, buf);
+                readSDisk++;
+            } while (blk_int2[2*BLOCK_TUPLE_NUM] != 0);
+            freeBlockInBuffer(blk_char1, buf);
+            readRDisk++;
+            readSDisk = 2000 + bucket*100;
+        } while (blk_int1[2*BLOCK_TUPLE_NUM] != 0);
+    }
     
+    result_blk_int[2*BLOCK_TUPLE_NUM] = 0;
+    result_blk_int[2*BLOCK_TUPLE_NUM+1] = DISK-1;
+    while (k < BLOCK_TUPLE_NUM) {
+        result_blk_int[2*k] = -1;
+        result_blk_int[2*k+1] = -1;
+        k++;
+    }
+    writeBlockToDisk(result_blk_char, DISK, buf);
+    freeBlockInBuffer(result_blk_char, buf);
+}
+
+void HashJoin(Buffer *buf) {
+    hashTable(R_BEGIN_DISK, buf);
+    hashTable(S_BEGIN_DISK, buf);
+    // printResult(1000, buf);
+    // printResult(1100, buf);
+    // printResult(1200, buf);
+    // printResult(1300, buf);
+    // printResult(1400, buf);
+
+    // printResult(2000, buf);
+    // printResult(2100, buf);
+    // printResult(2200, buf);
+    // printResult(2300, buf);
+    // printResult(2400, buf);
+    Hjoin(buf);
 }

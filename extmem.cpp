@@ -63,8 +63,10 @@ unsigned char *getNewBlockInBuffer(Buffer *buf)
 
 void freeBlockInBuffer(unsigned char *blk, Buffer *buf)
 {
-    *(blk - 1) = BLOCK_AVAILABLE;
-    buf->numFreeBlk++;
+    if (*(blk - 1) == BLOCK_UNAVAILABLE) {
+        *(blk - 1) = BLOCK_AVAILABLE;
+        buf->numFreeBlk++;
+    }
 }
 
 int dropBlockOnDisk(unsigned int addr)
