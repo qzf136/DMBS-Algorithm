@@ -34,4 +34,10 @@ void BPlusTreeSearch(int R_A, int S_C, Buffer *buf);
 
 void Project(Buffer *buf);
 
+void nestLoopJoin(Buffer *buf);
+
+void sortMergeJoin(Buffer *buf);
+
+void HashJoin(Buffer *buf);
+
 #endif

@@ -11,23 +11,23 @@ int main(int argc, char const *argv[])
     generateRS(&buf);
     // writeRS(R_BEGIN_DISK, S_BEGIN_DISK, &buf);
     // linearSelect(40, 60, &buf);
-    // printBlock(0, &buf);
-    // printBlock(1, &buf);
+    // printResult(0, &buf);
 
     // mergeSortAllDisk(&buf);
     // writeRS(R_BEGIN_DISK, S_BEGIN_DISK, &buf);
     // binarySearch(40, 60, &buf);
-    // printBlock(10, &buf);
-    // printBlock(11, &buf);
+    // printResult(0, &buf);
     
     // BPlusTreeSearch(40, 60, &buf);
-    // printBlock(0, &buf);
-    // printBlock(1, &buf);
+    // printResult(0, &buf);
 
-    Project(&buf);
+    // Project(&buf);
+    // printResult(0, &buf);
+
+    // nestLoopJoin(&buf);
+    // printResult(0, &buf);
+
+    sortMergeJoin(&buf);
     printResult(0, &buf);
-
-
-
     return 0;
 }

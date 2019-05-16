@@ -37,7 +37,6 @@ int setID = 0;
 static int bplus_tree_create(bplus_tree_pt *_tree, int m);
 static int bplus_tree_insert(bplus_tree_pt tree, KEY key, int val);
 static VALUE *bplus_tree_search(bplus_tree_pt tree, KEY key);
-static void bplus_tree_print(bplus_tree_pt tree);
 
 static bplus_node_pt bplus_node_new_leaf(int m);
 static bplus_node_pt bplus_node_new_internal(int m);
@@ -586,40 +585,6 @@ static VALUE *bplus_tree_search(bplus_tree_pt tree, KEY key) {
     return &(*node->data[index]);
 }
 
-static void bplus_node_printnode(KEY *key, int h) {
-    int i;
-    for (i=0; i < h; i++) {
-        printf("    ");
-    }
-    if (key == NULL) {
-        printf("*\n");
-    }
-    else {
-        printf("%d\n", *key);
-    }
-}
-
-static void bplus_node_show(bplus_node_pt node, int h) {
-    int i;
-
-    if (node == NULL) {
-        return;
-    }
-
-    if (node->child != NULL) {
-        bplus_node_show(node->child[0], h + 1);
-    }
-    for (i=0; i<node->keynum; i++) {
-        bplus_node_printnode(&node->keys[i], h);
-        if (node->child != NULL) {
-            bplus_node_show(node->child[i + 1], h + 1);
-        }
-    }
-}
-
-static void bplus_tree_print(bplus_tree_pt tree) {
-    bplus_node_show(tree->root, 0);
-}
 
 void generateRS(Buffer *buf) {
     int i, j;
@@ -693,6 +658,7 @@ void printResult(int begin, Buffer *buf) {
         }
         printf("next: %d\tlast: %d\n\n", blk_int[2*i], blk_int[2*i+1]);
         disk++;
+        freeBlockInBuffer(blk_char, buf);
     } while (blk_int[2*BLOCK_TUPLE_NUM] != 0);
 }
 
@@ -1067,4 +1033,126 @@ void Project(Buffer *buf) {
     }
 }
 
+void nestLoopJoin(Buffer *buf) {
+    int i1, j1, i2, j2;
+    int k = 0;
+    int DISK = 0;
+    unsigned char *blk_char1 = NULL;
+    unsigned int *blk_int1 = NULL;
+    unsigned char *blk_char2 = NULL;
+    unsigned int *blk_int2 = NULL;
+    unsigned char *result_blk_char = getNewBlockInBuffer(buf);
+    unsigned int *result_blk_int = (unsigned int *)result_blk_char;
+    for (i1 = 0; i1 < R_BLOCK_NUM; i1++) {
+        blk_char1 = readBlockFromDisk(R_BEGIN_DISK+i1, buf);
+        blk_int1 = (unsigned int *)blk_char1;
+        for (i2 = 0; i2 < S_BLOCK_NUM; i2++) {
+            blk_char2 = readBlockFromDisk(S_BEGIN_DISK+i2, buf);
+            blk_int2 = (unsigned int *)blk_char2;
+            for (j1 = 0; j1 < BLOCK_TUPLE_NUM; j1++) {
+                for (j2 = 0; j2 < BLOCK_TUPLE_NUM; j2++) {
+                    if (blk_int1[2*j1] == blk_int2[2*j2]) {
+                        result_blk_int[2*k] = blk_int1[2*j1];;
+                        result_blk_int[2*k+1] = blk_int1[2*j1+1];
+                        result_blk_int[2*k+2] = blk_int2[2*j2+1];
+                        result_blk_int[2*k+3] = -1;
+                        k+=2;
+                    }
+                    if (k == 6) {
+                        result_blk_int[2*k] = -1;
+                        result_blk_int[2*k+1] = -1;
+                        result_blk_int[2*BLOCK_TUPLE_NUM] = DISK+1;
+                        result_blk_int[2*BLOCK_TUPLE_NUM+1] = DISK-1;
+                        if (DISK == 0)  result_blk_int[2*BLOCK_TUPLE_NUM+1] = 0;
+                        writeBlockToDisk(result_blk_char, DISK, buf);
+                        result_blk_char = getNewBlockInBuffer(buf);
+                        result_blk_int = (unsigned int *)result_blk_char;
+                        k = 0;
+                        DISK++;
+                    }
+                }
+            }
+            freeBlockInBuffer(blk_char2, buf);
+        }
+        freeBlockInBuffer(blk_char1, buf);
+    }
+    if (k != 0) {
+        result_blk_int[2*BLOCK_TUPLE_NUM] = 0;
+        result_blk_int[2*BLOCK_TUPLE_NUM+1] = DISK-1;
+        if (DISK == 0)  result_blk_int[2*BLOCK_TUPLE_NUM+1] = 0;
+        while (k < BLOCK_TUPLE_NUM+1) {
+            result_blk_int[2*k] = 0;
+            result_blk_int[2*k+1] = 0;
+            k++;
+        }
+        writeBlockToDisk(result_blk_char, DISK, buf);
+    }
+}
 
+void sortMergeJoin(Buffer *buf) {
+    mergeSortAllDisk(buf);
+    writeRS(100, 200, buf);
+    int i1, j1, i2, j2;
+    int m2 = 0;
+    int k = 0;
+    int DISK = 0;
+    unsigned char *blk_char1 = NULL;
+    unsigned int *blk_int1 = NULL;
+    unsigned char *blk_char2 = NULL;
+    unsigned int *blk_int2 = NULL;
+    unsigned char *result_blk_char = getNewBlockInBuffer(buf);
+    unsigned int *result_blk_int = (unsigned int *)result_blk_char;
+    for (i1 = 0; i1 < R_BLOCK_NUM; i1++) {
+        blk_char1 = readBlockFromDisk(R_BEGIN_DISK+i1, buf);
+        blk_int1 = (unsigned int *)blk_char1;
+        for (i2 = m2; i2 < S_BLOCK_NUM; i2++) {
+            blk_char2 = readBlockFromDisk(S_BEGIN_DISK+i2, buf);
+            blk_int2 = (unsigned int *)blk_char2;
+            for (j1 = 0; j1 < BLOCK_TUPLE_NUM; j1++) {
+                for (j2 = 0; j2 < BLOCK_TUPLE_NUM; j2++) {
+                    if (blk_int1[2*j1] < blk_int2[2*j2])    break;
+                    if (blk_int1[2*j1] == blk_int2[2*j2]) {
+                        // printf("%d %d %d %d -1\n", blk_int1[2*j1], blk_int1[2*j1+1], blk_int2[2*j2], blk_int2[2*j2+1]);
+                        // printf("%d  %d\n", DISK, k);
+                        result_blk_int[2*k] = blk_int1[2*j1];
+                        result_blk_int[2*k+1] = blk_int1[2*j1+1];
+                        result_blk_int[2*k+2] = blk_int2[2*j2+1];
+                        result_blk_int[2*k+3] = -1;
+                        k+=2;
+                    }
+                    if (k == 6) {
+                        result_blk_int[2*k] = -1;
+                        result_blk_int[2*k+1] = -1;
+                        result_blk_int[2*BLOCK_TUPLE_NUM] = DISK+1;
+                        result_blk_int[2*BLOCK_TUPLE_NUM+1] = DISK-1;
+                        if (DISK == 0)  result_blk_int[2*BLOCK_TUPLE_NUM+1] = 0;
+                        writeBlockToDisk(result_blk_char, DISK, buf);
+                        result_blk_char = getNewBlockInBuffer(buf);
+                        result_blk_int = (unsigned int *)result_blk_char;
+                        k = 0;
+                        DISK++;
+                    }
+                }
+            }
+            freeBlockInBuffer(blk_char2, buf);
+            if (blk_int1[2*BLOCK_TUPLE_NUM-2] < blk_int2[2*BLOCK_TUPLE_NUM-2])  break;
+        }
+        m2 = i2;
+        freeBlockInBuffer(blk_char1, buf);
+    }
+    if (k != 0) {
+        result_blk_int[2*BLOCK_TUPLE_NUM] = 0;
+        result_blk_int[2*BLOCK_TUPLE_NUM+1] = DISK-1;
+        if (DISK == 0)  result_blk_int[2*BLOCK_TUPLE_NUM+1] = 0;
+        while (k < BLOCK_TUPLE_NUM+1) {
+            result_blk_int[2*k] = 0;
+            result_blk_int[2*k+1] = 0;
+            k++;
+        }
+        writeBlockToDisk(result_blk_char, DISK, buf);
+    }
+}
+
+void HashJoin(Buffer *buf) {
+    
+}
